@@ -38,6 +38,7 @@ var addOns =
         "beanshell",
         "browserView",
         "bruteforce",
+        "BryanAddOn",
         "bugtracker",
         "callgraph",
         "callhome",

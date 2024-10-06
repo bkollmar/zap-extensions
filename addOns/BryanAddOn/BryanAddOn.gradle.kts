@@ -1,7 +1,7 @@
-description = "A simple extension example."
+description = "Zap add on description to be determined"
 
 zapAddOn {
-    addOnName.set("Simple Example")
+    addOnName.set("BryanAddOn")
 
     manifest {
         author.set("ZAP Dev Team")

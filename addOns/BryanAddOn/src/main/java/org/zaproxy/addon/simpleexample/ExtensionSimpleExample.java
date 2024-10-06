@@ -46,11 +46,11 @@ import org.zaproxy.zap.view.ZapMenuItem;
 public class ExtensionSimpleExample extends ExtensionAdaptor {
 
     // The name is public so that other extensions can access it
-    public static final String NAME = "ExtensionSimpleExample";
+    public static final String NAME = "ExtensionBryanAddoOn";
 
     // The i18n prefix, by default the package name - defined in one place to make it easier
     // to copy and change this example
-    protected static final String PREFIX = "simpleExample";
+    protected static final String PREFIX = "BryanAddOn";
 
     /**
      * Relative path (from add-on package) to load add-on resources.
