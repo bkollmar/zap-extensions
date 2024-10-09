@@ -43,7 +43,7 @@ import org.zaproxy.zap.view.ZapMenuItem;
  *
  * @see #hook(ExtensionHook)
  */
-public class ExtensionSimpleExample extends ExtensionAdaptor {
+public class ExtensionBryanAddoOn extends ExtensionAdaptor {
 
     // The name is public so that other extensions can access it
     public static final String NAME = "ExtensionBryanAddoOn";
