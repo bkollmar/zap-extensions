@@ -35,6 +35,18 @@ import org.parosproxy.paros.view.View;
 import org.zaproxy.zap.utils.FontUtils;
 import org.zaproxy.zap.view.ZapMenuItem;
 
+//my imports :)
+import org.parosproxy.paros.model.Model;
+import org.parosproxy.paros.model.Session;
+import org.parosproxy.paros.db.Database;
+import org.parosproxy.paros.db.TableHistory;
+import java.util.List;
+import java.util.HashMap;
+import java.io.FileWriter;
+
+
+
+
 /**
  * An example ZAP extension which adds a top level menu item, a pop up menu item and a status panel.
  *
@@ -107,6 +119,12 @@ public class ExtensionSimpleExample extends ExtensionAdaptor {
         // here (if the extension declares that can be unloaded, see above method).
     }
 
+
+    //GamePlan, find out how to get string
+        //find out how to access history
+    //find out how to use right click to run getString
+
+
     private AbstractPanel getStatusPanel() {
         if (statusPanel == null) {
             statusPanel = new AbstractPanel();
@@ -118,11 +136,19 @@ public class ExtensionSimpleExample extends ExtensionAdaptor {
             // Obtain (and set) a font with the size defined in the options
             pane.setFont(FontUtils.getFont("Dialog", Font.PLAIN));
             pane.setContentType("text/html");
-            pane.setText(Constant.messages.getString(PREFIX + ".panel.msg"));
+            pane.setText(Constant.messages.getString(PREFIX + ".panel.msg")); //seems useful
+            //pane.setText("HEHEHEHEHE, Coding");//this works
+
+
+            //List<Integer> ids = tbHist.getHistoryIds(sessionId.getSessionId());
+            //That Python Stuff
+            //for index in tbHist.getHistoryIds(sessionId.getSessionId()):
+
             statusPanel.add(pane);
         }
         return statusPanel;
     }
+
 
     private ZapMenuItem getMenuExample() {
         if (menuExample == null) {
@@ -132,15 +158,69 @@ public class ExtensionSimpleExample extends ExtensionAdaptor {
                     e -> {
                         // This is where you do what you want to do.
                         // In this case we'll just show a popup message.
+                        
+                        //heres what they do
                         View.getSingleton()
-                                .showMessageDialog(
-                                        Constant.messages.getString(PREFIX + ".topmenu.tools.msg"));
-                        // And display a file included with the add-on in the Output tab
-                        displayFile(EXAMPLE_FILE);
+                                .showMessageDialog("Cool");
+                                        // Constant.messages.getString(PREFIX + ".topmenu.tools.msg"));
+
+
+                        //Heres what I do
+                        //doSomething();
+                        String msg="hi";
+                        String err="";
+
+                        //helper methods
+                        Model model = new Model();
+                        Long sessionId = model.getSession().getSessionId();
+                        TableHistory tbHist = model.getDb().getTableHistory();
+                       
+                        
+                        //declare lists
+                        try{
+                        List<Integer> ids = tbHist.getHistoryIds(sessionId);
+                        msg=Integer.toString(ids.get(0));
+                        HashMap<String, Integer> urls = new HashMap<String, Integer>();
+                        } catch (Exception excep){
+                            err=excep.getMessage();
+
+                        }
+
+                        try{
+                        FileWriter writer = new FileWriter("/Users/ryanmueller/Library/Application Support/ZAP_D/example/ExampleFile.txt");
+                        writer.write(msg);
+                        //writer.write(err);
+                        writer.close();
+                        displayFile("/example/ExampleFile.txt");
+                        } catch(Exception excep){
+                            //ystem.err.println(excep);
+                        }
+
                     });
         }
         return menuExample;
     }
+
+    // private String doSomething(){
+    //     String msg;
+
+    //     //helper methods
+    //     Model model = new Model();
+    //     Long sessionId = model.getSession().getSessionId();
+    //     //TableHistory tbHist = model.getDb().getTableHistory();
+
+    //     //declare lists
+    //     try {
+    //     List<Integer> ids = model.getDb().getTableHistory().getHistoryIds(sessionId);
+    //     } catch (Exception e){
+    //         System.err.println(e);
+    //     }
+    //     HashMap<String, Integer> urls = new HashMap<String, Integer>();
+
+    //     //for i=0
+
+    //     return "";
+    // }
 
     private void displayFile(String file) {
         if (!View.isInitialised()) {
