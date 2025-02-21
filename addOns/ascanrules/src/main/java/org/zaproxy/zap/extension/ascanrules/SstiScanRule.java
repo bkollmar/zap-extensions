@@ -175,7 +175,6 @@ public class SstiScanRule extends AbstractAppParamPlugin implements CommonActive
      */
     @Override
     public void scan(HttpMessage msg, String paramName, String value) {
-
         // In LOW mode we can only make 6 requests by parameter
         // so we use an greedy approach where we reduce the number of
         // request in exchange for an increase in false negatives.
@@ -245,6 +244,7 @@ public class SstiScanRule extends AbstractAppParamPlugin implements CommonActive
 
         if (hasSuspectBehaviourWithPolyglot(paramName, inputPoint)) {
             searchForMathsExecution(paramName, inputPoint, false);
+            checkPageContent(refMsg, paramName, referenceValue);
         }
     }
 
@@ -292,6 +292,12 @@ public class SstiScanRule extends AbstractAppParamPlugin implements CommonActive
         }
 
         searchForMathsExecution(paramName, inputPoint, fixSyntax);
+
+        if (isStop()) {
+            return;
+        }
+
+        checkPageContent(msg, paramName, value);
     }
 
     /**
@@ -351,7 +357,6 @@ public class SstiScanRule extends AbstractAppParamPlugin implements CommonActive
         boolean found = false;
         String[] codeFixPrefixes = {""};
         String templateFixingPrefix;
-
         if (fixSyntax) {
             codeFixPrefixes = WAYS_TO_FIX_CODE_SYNTAX;
         }
@@ -440,6 +445,87 @@ public class SstiScanRule extends AbstractAppParamPlugin implements CommonActive
                             ex);
                 }
             }
+        }
+    }
+
+    private void checkPageContent(HttpMessage msg, String paramName, String value) {
+        try {
+            for (TemplateFormat format : TEMPLATE_FORMATS) {
+                // Construct the SSTI payload
+                String sstiPayload =
+                        "zapSSTI'%s7*7%s'".formatted(format.getStartTag(), format.getEndTag());
+
+                // Create a new POST request
+                HttpMessage postMsg = getNewMsg();
+                postMsg.getRequestHeader().setMethod("POST");
+                postMsg.getRequestHeader()
+                        .setHeader("Content-Type", "application/x-www-form-urlencoded");
+
+                // Manually set the body to prevent url-encoding
+                String requestBody = paramName + "=" + sstiPayload;
+                postMsg.setRequestBody(requestBody);
+                postMsg.getRequestHeader().setContentLength(postMsg.getRequestBody().length());
+
+                sendAndReceive(postMsg, false); // Send the raw POST request
+
+                // Now send a GET request to check if SSTI execution occurred
+                HttpMessage getProfileMsg = new HttpMessage(postMsg.getRequestHeader().getURI());
+                getProfileMsg.getRequestHeader().setMethod("GET");
+
+                // Preserve authentication/session details
+                getProfileMsg
+                        .getRequestHeader()
+                        .setHeader(
+                                "User-Agent", postMsg.getRequestHeader().getHeader("User-Agent"));
+                getProfileMsg
+                        .getRequestHeader()
+                        .setHeader("Cookie", postMsg.getRequestHeader().getHeader("Cookie"));
+                getProfileMsg
+                        .getRequestHeader()
+                        .setHeader("Referer", postMsg.getRequestHeader().getURI().toString());
+                getProfileMsg
+                        .getRequestHeader()
+                        .setHeader("Origin", postMsg.getRequestHeader().getHostName());
+
+                sendAndReceive(getProfileMsg, false); // Fetch profile page
+
+                String responseBody = getProfileMsg.getResponseBody().toString();
+                String otherInfo = getOtherInfo(paramName, value);
+                if (responseBody.contains("zapSSTI'49'")) { // Check if SSTI was executed
+                    String output = getProfileMsg.getResponseBody().toString();
+                    String proofLine = null;
+
+                    // Find the index of the target string
+                    int index = output.indexOf("zapSSTI'49'");
+                    if (index != -1) {
+                        int contextLength = 20; // Number of characters before and after
+
+                        // Calculate safe boundaries
+                        int start = Math.max(0, index - contextLength);
+                        int end =
+                                Math.min(
+                                        output.length(),
+                                        index + "zapSSTI'49'".length() + contextLength);
+
+                        // Extract substring with context
+                        proofLine = output.substring(start, end).trim();
+                    }
+
+                    createAlert(
+                                    getProfileMsg.getRequestHeader().getURI().toString(),
+                                    paramName,
+                                    sstiPayload,
+                                    otherInfo)
+                            .setEvidence(proofLine)
+                            .setMessage(getProfileMsg)
+                            .raise();
+
+                    break;
+                }
+            }
+
+        } catch (IOException e) {
+            LOGGER.warn("Failed to send SSTI test requests: ", e);
         }
     }
 
