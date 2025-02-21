@@ -113,10 +113,11 @@ class SstiScanRuleUnitTest extends ActiveScannerTest<SstiScanRule> {
     }
 
     @Test
-    void shouldNotDoMathsExecutionTestIfInThresholdLowAndNoSuspectBehavior()
+    void shouldNotDoMathsExecutionOrCheckPageContentTestIfInThresholdLowAndNoSuspectBehavior()
             throws HttpMalformedHeaderException {
         // Given
-        String test = "/shouldNotDoMathsExecutionTestIfInThresholdLowAndNoSuspectBehavior/";
+        String test =
+                "/shouldNotDoMathsExecutionOrCheckPageContentTestIfInThresholdLowAndNoSuspectBehavior/";
         nano.addHandler(
                 new NanoServerHandler(test) {
                     @Override
@@ -313,6 +314,114 @@ class SstiScanRuleUnitTest extends ActiveScannerTest<SstiScanRule> {
         assertThat(example.getConfidence(), is(equalTo(Alert.CONFIDENCE_HIGH)));
         assertThat(example.getParam(), is(equalTo("name")));
         assertThat(example.getAttack(), is(equalTo("zj#set($x=2614*1450)${x}zj")));
+    }
+
+    @Test
+    void shouldDetectSstiInPostFollowedByGet() throws IOException {
+        String testPath = "/sstiPostGetTest/";
+
+        // Given
+        nano.addHandler(
+                new NanoServerHandler(testPath) {
+                    @Override
+                    protected Response serve(IHTTPSession session) {
+                        if ("POST".equals(session.getMethod().name())) {
+                            return newFixedLengthResponse("OK"); 
+                        } else if ("GET".equals(session.getMethod().name())) {
+                            return newFixedLengthResponse(
+                                    "<html>Profile zapSSTI'49'</html>"); 
+                        }
+                        return newFixedLengthResponse("Unexpected method");
+                    }
+                });
+
+        HttpMessage postMsg = getHttpMessage(testPath);
+        postMsg.getRequestHeader().setMethod("POST");
+        postMsg.getRequestBody().setBody("name=zapSSTI'#{7*7}'");
+        postMsg.getRequestHeader().setContentLength(postMsg.getRequestBody().length());
+
+        HttpMessage getMsg = getHttpMessage(testPath);
+        getMsg.getRequestHeader().setMethod("GET");
+        
+        // When
+        rule.init(postMsg, parent);
+        rule.scan();
+
+        // Then
+        assertThat(alertsRaised.size(), equalTo(1));
+        assertThat(alertsRaised.get(0).getRisk(), equalTo(Alert.RISK_HIGH));
+        assertThat(alertsRaised.get(0).getConfidence(), equalTo(Alert.CONFIDENCE_HIGH));
+        assertThat(alertsRaised.get(0).getEvidence(), equalTo("zapSSTI'49'"));
+    }
+
+    @Test
+    void shouldNotDetectSstiWhenGetResponseDoesNotMatch() throws IOException {
+        String testPath = "/sstiPostGetNegativeTest/";
+
+        // Given
+        nano.addHandler(
+                new NanoServerHandler(testPath) {
+                    @Override
+                    protected Response serve(IHTTPSession session) {
+                        if ("POST".equals(session.getMethod().name())) {
+                            return newFixedLengthResponse("OK");
+                        } else if ("GET".equals(session.getMethod().name())) {
+                            return newFixedLengthResponse(
+                                    "<html>No SSTI here</html>"); 
+                        }
+                        return newFixedLengthResponse("Unexpected method");
+                    }
+                });
+
+        HttpMessage postMsg = getHttpMessage(testPath);
+        postMsg.getRequestHeader().setMethod("POST");
+        postMsg.getRequestBody().setBody("name=zapSSTI'#{7*7}'");
+        postMsg.getRequestHeader().setContentLength(postMsg.getRequestBody().length());
+
+        HttpMessage getMsg = getHttpMessage(testPath);
+        getMsg.getRequestHeader().setMethod("GET");
+
+        // When
+        rule.init(postMsg, parent);
+        rule.scan();
+
+        // Then
+        assertThat(alertsRaised.size(), equalTo(0));
+    }
+
+    @Test
+    void shouldHandleGetRequestFailureGracefully() throws IOException {
+        String testPath = "/sstiGetRequestFailure/";
+
+        // Given
+        nano.addHandler(
+                new NanoServerHandler(testPath) {
+                    @Override
+                    protected Response serve(IHTTPSession session) {
+                        if ("POST".equals(session.getMethod().name())) {
+                            return newFixedLengthResponse("OK");
+                        } else if ("GET".equals(session.getMethod().name())) {
+                            return newFixedLengthResponse(
+                                    Response.Status.INTERNAL_ERROR, "text/html", "Server Error");
+                        }
+                        return newFixedLengthResponse("Unexpected method");
+                    }
+                });
+
+        HttpMessage postMsg = getHttpMessage(testPath);
+        postMsg.getRequestHeader().setMethod("POST");
+        postMsg.getRequestBody().setBody("name=zapSSTI'#{7*7}'");
+        postMsg.getRequestHeader().setContentLength(postMsg.getRequestBody().length());
+
+        HttpMessage getMsg = getHttpMessage(testPath);
+        getMsg.getRequestHeader().setMethod("GET");
+        
+        // When
+        rule.init(postMsg, parent);
+        rule.scan();
+
+        // Then
+        assertThat(alertsRaised.size(), equalTo(0));
     }
 
     private static String templateRenderMock(String startTag, String endTag, String input)
