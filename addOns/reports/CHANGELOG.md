@@ -6,8 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ## Unreleased
 
 
-## [0.36.0] - 2025-02-12
+## [0.37.0] - 2025-02-21
+### Fixed
+- Include correct alert instances in Traditional JSON Report with requests and responses (Issue 8861).
+- Bug where false positives were included in Sarif reports with their original alert level.
 
+## [0.36.0] - 2025-02-12
+### Changed
+- Allow multiple add-ons to provide report data.
 
 ## [0.35.0] - 2025-01-10
 ### Added
@@ -309,6 +315,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - First version.
 
+[0.37.0]: https://github.com/zaproxy/zap-extensions/releases/reports-v0.37.0
 [0.36.0]: https://github.com/zaproxy/zap-extensions/releases/reports-v0.36.0
 [0.35.0]: https://github.com/zaproxy/zap-extensions/releases/reports-v0.35.0
 [0.34.0]: https://github.com/zaproxy/zap-extensions/releases/reports-v0.34.0

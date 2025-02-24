@@ -123,9 +123,12 @@ public class TimestampDisclosureScanRule extends PluginPassiveScanner
 
     @Override
     public void scanHttpResponseReceive(HttpMessage msg, int id, Source source) {
-        if (ResourceIdentificationUtils.isFont(msg)) {
+        if (ResourceIdentificationUtils.isFont(msg)
+                || (this.getAlertThreshold().equals(AlertThreshold.HIGH)
+                        && ResourceIdentificationUtils.isJavaScript(msg))) {
             return;
         }
+
         LOGGER.debug("Checking message {} for timestamps", msg.getRequestHeader().getURI());
 
         List<HttpHeaderField> responseparts = new ArrayList<>();
@@ -198,7 +201,9 @@ public class TimestampDisclosureScanRule extends PluginPassiveScanner
                 .setSolution(Constant.messages.getString(MESSAGE_PREFIX + "soln"))
                 .setReference(Constant.messages.getString(MESSAGE_PREFIX + "refs"))
                 .setEvidence(evidence)
-                .setCweId(200) // CWE Id 200 - Information Exposure
+                // CWE-497: Exposure of Sensitive System Information to an Unauthorized Control
+                // Sphere
+                .setCweId(497)
                 .setWascId(13); // WASC Id - Info leakage
     }
 

@@ -4,7 +4,30 @@ All notable changes to this add-on will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## Unreleased
+### Fixed
+- The Absence of Anti-CSRF Tokens scan rule now only considers forms with GET method at Low Threshold. (Forms submitted via GET, not forms delivered via GET.)
+- The Information Disclosure - Suspicious Comments scan rule:
+    - Should now be less false positive prone on JavaScript findings (Issues 6622 & 6736).
+    - Now skips obvious font requests even if their content type is text/html or text related.
+- Updated Timestamp Disclosure Scan Rule to skip JavaScript files when Alert Threshold is set to High (Issue 8380).
 
+### Changed
+- Replace usage of CWE-200 for the following rules (Issue 8712):
+    - Application Error Disclosure (Issue 8716)
+    - HTTP Server Response Header
+    - Hash Disclosure
+    - Information Disclosure - Debug Error Messages
+    - Information Disclosure - Sensitive Information in HTTP Referrer Header
+    - Information Disclosure - Sensitive Information in URL
+    - Information Disclosure - Suspicious Comments
+    - Private IP Disclosure
+    - Server Leaks Information via "X-Powered-By" HTTP Response Header
+    - Session ID in URL Rewrite
+    - Timestamp Disclosure
+    - X-Backend-Server Header Information Leak
+    - X-ChromeLogger-Data (XCOLD) Header Information Leak
+    - X-Debug-Token Information Leak
+- Removed lack of "report-uri" or "plugin-types" from "CSP: Wildcard Directive" alerts when missing. plugin-types is deprecated and report-uri has no impact for this issue. (Issue 8700)
 
 ## [62] - 2025-01-10
 ### Changed
